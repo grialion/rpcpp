@@ -1,6 +1,9 @@
-#!/bin/sh
+#!/bin/bash
+# SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(pwd)/lib"
 export LD_LIBRARY_PATH
+
+cd `dirname $0` && pwd
 
 ./rpcfetch.sh &
 cd build
