@@ -75,16 +75,22 @@ void *updatefifo(void *ptr)
         if (lines.length() > 0)
         {
             cout << lines << endl;
-            regex wm = regex("wm: (\\w+)");
+            regex runp("discord: false");
+            regex wm("wm: (\\w+)");
             regex window("window: ([^\n]+)");
             regex distro("distro: ([^\n]+)");
             regex cpu("cpu: ([^\n]+)");
             regex mem("mem: ([^\n]+)");
+            smatch runm;
             smatch windowmatch;
             smatch wmmatch;
             smatch distromatch;
             smatch cpum;
             smatch memm;
+
+            if(regex_search(lines, runm, runp)) {
+                exit(-1);
+            }
 
             if (regex_search(lines, windowmatch, window) &&
                 regex_search(lines, distromatch, distro) &&

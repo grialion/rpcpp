@@ -139,13 +139,14 @@ fi
 get_wm
 lastmsg=;
 distro=$(( lsb_release -ds || cat /etc/*release || uname -om ) 2>/dev/null | head -n1);
+discordrunning="( [ \"\$(pgrep Discord)\" = \"\" ] && echo false ) || echo true"
 cpuu="cat <(grep 'cpu ' /proc/stat) <(sleep 1 && grep 'cpu ' /proc/stat) | awk -v RS=\"\" '{print (\$13-\$2+\$15-\$4)*100/(\$13-\$2+\$15-\$4+\$16-\$5) }'"
 memu="free -t | awk 'NR == 2 {printf \"%.2f\", \$3/\$2*100}'"
 cpup=$(eval $cpuu)
 memp=$(eval $memu)
 while true
 do
-    newmsg="wm: $wm\\nwindow: $(xdotool getactivewindow getwindowclassname)\\ndistro: $(lsb_release -is)"
+    newmsg="wm: $wm\\nwindow: $(xdotool getactivewindow getwindowclassname)\\ndistro: $(lsb_release -is)\\ndiscord: $(eval $discordrunning)"
     if [ "$newmsg" = "$lastmsg" ]; then
         sleep 1
     else

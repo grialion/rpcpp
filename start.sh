@@ -4,6 +4,19 @@ export LD_LIBRARY_PATH
 
 ./rpcfetch.sh &
 cd build
-sleep 3 # rpcpp tries to read the fifo too fast, need to wait before it's created
-./rpcpp
+sleep 1 # rpcpp tries to read the fifo too fast, need to wait before it's created
+
+while true; do
+    if [ "$(pgrep Discord)" = "" ]; then
+        echo "discord not running yet, waiting"
+        sleep 10
+        continue
+    fi
+    ./rpcpp
+    if [ $? == 137 ]; then
+        break;
+    fi
+    sleep 5
+    echo "Retrying"
+done
 pkill -x rpcfetch.sh

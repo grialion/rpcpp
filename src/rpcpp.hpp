@@ -93,6 +93,6 @@ bool in_array(const std::string &value, const std::vector<std::string> &array)
     return std::find(array.begin(), array.end(), value) != array.end();
 }
 
-std::vector<std::string> apps = {"blender", "chrome", "discord", "firefox", "gimp", "st", "surf", "vscode"}; // currently supported app icons on discord rpc (replace if you made your own discord application)
-std::map<std::string, std::string> aliases = { {"chromium", "chrome"}, {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"} }; // for apps with different names
-std::map<std::string, std::string> distros = {{"Arch|Artix", "archlinux"}, {"Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}};
+std::vector<std::string> apps = {"blender", "chrome", "discord", "firefox", "gimp", "hoi4", "st", "surf", "vscode"}; // currently supported app icons on discord rpc (replace if you made your own discord application)
+std::map<std::string, std::string> aliases = { {"chromium", "chrome"}, {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"} }; // for apps with different names
+std::map<std::string, std::string> distros = {{"Arch|Artix", "archlinux"}, {"Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};
