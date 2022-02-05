@@ -19,10 +19,22 @@
 
 - GIMP
   
+<img style="float: right;" width=20 src="https://cdn.discordapp.com/app-assets/934099338374824007/934424699004395541.png">
+
+- Hearts Of Iron IV
+  
+<img style="float: right;" width=20 src="https://cdn.discordapp.com/app-assets/934099338374824007/934423781072592957.png">
+
+- Minecraft
+
 <img style="float: right;" width=20 src="https://cdn.discordapp.com/app-assets/934099338374824007/934171932373438504.png">
 
 - st (simple terminal)
   
+<img style="float: right;" width=20 src="https://cdn.discordapp.com/app-assets/934099338374824007/934423780816732192.png">
+
+- Stardew Valley
+
 <img style="float: right;" width=20 src="https://cdn.discordapp.com/app-assets/934099338374824007/934171933182951524.png">
 
 - surf

@@ -17,27 +17,26 @@ apt install xdotool unzip -y
 ---
 **GNU Make**, **xdotool** and **Discord Game SDK** are **required**. To see more information about setting up Discord Game SDK, see [DISCORD.md](./DISCORD.md)
 
-To build RPC++ use the command: 
+To build RPC++, use the command: 
 ```
 make
 ```
 
-## Running
-You might run into issues with running RPC++. The easiest way to start the program is running 
+## Installing & Running
+To install RPC++, run the this command:
 ```
-./start.sh
+sudo make install
 ```
-If you get error messages like `./start.sh: line 5: ./rpcfetch.sh: Permission denied`, just run
+You can run the app from any directory with
 ```
-chmod +x *.sh
+rpcpp
 ```
-This will flag all of the shell scripts as executable.
 
 To run manually you need to start first `rpcfetch.sh` and then start `rpcpp` with the variables `LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(pwd)/lib"`
 
 ## Features
 ---
-- Displays your distro with an icon (supported: Arch, Gentoo, Mint, Ubuntu)
+- Displays your distro with an icon (supported: Arch, Gentoo, Mint, Ubuntu, Manjaro)
 - Displays the focused window's class name with an icon (see supported apps [here](./APPLICATIONS.md))
 - Displays CPU and RAM usage %
 - Displays your window manager (WM)
