@@ -4,3 +4,4 @@ build/
 src/discord
 lib/
 rpcpp
+tmp/

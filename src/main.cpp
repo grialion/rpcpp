@@ -1,123 +1,102 @@
 #include "rpcpp.hpp"
+#include "wm.hpp"
 
-Window getWindow(string w)
-{
-    Window window{};
-    window.text = w;
-    window.image = "file";
-    w = lower(w);
-
-    if (in_array(w, apps))
-    {
-        window.image = w;
-    }
-    else
-    {
-        for (const auto &kv : aliases)
-        {
-            regex r = regex(kv.first);
-            smatch m;
-            if (regex_match(w, m, r))
-            {
-                window.image = kv.second;
-                break;
-            }
-        }
-    }
-
-    return window;
-}
-
-Dist getDistro(string d)
-{
-    Dist dist{};
-    dist.text = d;
-    dist.image = "tux";
-
-    for (const auto &kv : distros)
-    {
-        regex r = regex(kv.first);
-        smatch m;
-        if (regex_match(d, m, r))
-        {
-            dist.image = kv.second;
-            break;
-        }
-    }
-
-    return dist;
-}
-
-void *updatefifo(void *ptr)
+void *updateRPC(void *ptr)
 {
     DiscordState *state = (struct DiscordState *)ptr;
 
-    std::ifstream fifo;
-    fifo.open("/tmp/rpcfifo0", ifstream::in);
-    if (!fifo.is_open())
-    {
-        std::cout << "Can't open the fifo file. Perhaps the fetch.sh isn't running yet?" << std ::endl;
-        interrupted = true;
-        exit(-1);
-    }
-    std::string line;
+    string lastWindow;
+
+    debug("Waiting for usages to load...");
+    sleep(3); // wait for usages to load
+    debug("Starting RPC loop.");
     while (true)
     {
-        string lines = "";
-        while (std::getline(fifo, line))
-        {
-            lines.append("\n").append(line);
-        }
-        if (fifo.eof())
-        {
-            fifo.clear();
-        }
-        if (lines.length() > 0)
-        {
-            cout << lines << endl;
-            regex runp("discord: false");
-            regex wm("wm: (\\w+)");
-            regex window("window: ([^\n]+)");
-            regex distro("distro: ([^\n]+)");
-            regex cpu("cpu: ([^\n]+)");
-            regex mem("mem: ([^\n]+)");
-            smatch runm;
-            smatch windowmatch;
-            smatch wmmatch;
-            smatch distromatch;
-            smatch cpum;
-            smatch memm;
+        sleep(options.updateSleep / 1000.0);
+        string windowName;
 
-            if(regex_search(lines, runm, runp)) {
-                exit(-1);
-            }
-
-            if (regex_search(lines, windowmatch, window) &&
-                regex_search(lines, distromatch, distro) &&
-                regex_search(lines, wmmatch, wm) &&
-                regex_search(lines, cpum, cpu) &&
-                regex_search(lines, memm, mem))
-            {
-                Dist d = getDistro(distromatch[1]);
-                Window w = getWindow(windowmatch[1]);
-                string wms = "WM: " + string(wmmatch[1]);
-                string cpus = cpum[1];
-                string mems = memm[1];
-                int cpui = round(atof(cpus.c_str()));
-                int memi = round(atof(mems.c_str()));
-
-                setActivity((*state), "CPU: " + to_string(cpui) + "%" + " | RAM: " + to_string(memi) + "%", wms, w.image, w.text, d.image, d.text, startTime, discord::ActivityType::Playing);
-            }
+        try
+        {
+            windowName = getActiveWindowName(disp);
         }
-        sleep(0.1);
+        catch (exception ex)
+        {
+            cout << "Error: " << ex.what() << endl;
+            continue;
+        }
+
+        if (windowName != lastWindow)
+        {
+            lastWindow = windowName;
+
+            DistroAsset distroAsset = getDistroAsset(distro);
+            WindowAsset windowAsset = getWindowAsset(windowName);
+            string cpupercent = to_string((long)cpu);
+            string rampercent = to_string((long)mem);
+
+            setActivity(*state, string("CPU: " + cpupercent + "% | RAM: " + rampercent + "%"), "WM: " + wm, windowAsset.image, windowAsset.text, distroAsset.image, distroAsset.text, startTime, discord::ActivityType::Playing);
+        }
     }
-    interrupted = true;
-    return 0;
 }
 
-int main()
+void *updateUsage(void *ptr)
 {
-    startTime = ms_uptime();
+    distro = getDistro();
+
+    startTime = time(0) - ms_uptime();
+    wm = string(wm_info(disp));
+    while (true)
+    {
+        mem = getRAM();
+        cpu = getCPU();
+        sleep(options.usageSleep / 1000.0);
+    }
+}
+
+int main(int argc, char **argv)
+{
+    parseArgs(argc, argv);
+
+    if(options.printHelp)
+    {
+        cout << helpMsg << endl;
+        exit(0);
+    }
+    if(options.printVersion)
+    {
+        cout << "RPC++ version " << VERSION << endl;
+        exit(0); 
+    }
+
+    int waitedTime = 0;
+    while (!processRunning("discord") && !options.ignoreDiscord)
+    {
+        if (waitedTime > 60)
+        {
+            cout << "Discord is not running for " << waitedTime << " seconds. Maybe ignore Discord check with --ignore-discord or -f? ";
+        }
+        cout << "Waiting for Discord..." << endl;
+        waitedTime += 5;
+        sleep(5);
+    }
+
+    disp = XOpenDisplay(NULL);
+
+    if (!disp)
+    {
+        cout << "Can't open display" << endl;
+        return -1;
+    }
+
+    static int (*old_error_handler)(Display *, XErrorEvent *);
+    trapped_error_code = 0;
+    old_error_handler = XSetErrorHandler(error_handler);
+
+    pthread_t updateThread;
+    pthread_t usageThread;
+    pthread_create(&usageThread, 0, updateUsage, 0);
+    debug("Created usage thread");
+
     DiscordState state{};
 
     discord::Core *core{};
@@ -125,30 +104,36 @@ int main()
     state.core.reset(core);
     if (!state.core)
     {
-        std::cout << "Failed to instantiate discord core! (err " << static_cast<int>(result)
-                  << ")\n";
-        std::exit(-1);
+        cout << "Failed to instantiate discord core! (err " << static_cast<int>(result)
+             << ")\n";
+        exit(-1);
     }
-    state.core->SetLogHook(
-        discord::LogLevel::Debug, [](discord::LogLevel level, const char *message)
-        { std::cerr << "Log(" << static_cast<uint32_t>(level) << "): " << message << "\n"; });
 
-    pthread_t updatethread;
+    if (options.debug)
+    {
+        state.core->SetLogHook(
+            discord::LogLevel::Debug, [](discord::LogLevel level, const char *message)
+            { cerr << "Log(" << static_cast<uint32_t>(level) << "): " << message << "\n"; });
+    }
 
-    pthread_create(&updatethread, 0, updatefifo, ((void *)&state));
-    std::cout << "Fifo thread started." << std::endl;
+    pthread_create(&updateThread, 0, updateRPC, ((void *)&state));
+    debug("Threads started.");
+    cout << "Connected to Discord." << endl;
 
-    std::signal(SIGINT, [](int)
-                { interrupted = true; });
+    signal(SIGINT, [](int)
+           { interrupted = true; });
 
     do
     {
         state.core->RunCallbacks();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        this_thread::sleep_for(chrono::milliseconds(16));
     } while (!interrupted);
 
-    pthread_kill(updatethread, 9);
+    cout << "Exiting..." << endl;
+
+    pthread_kill(updateThread, 9);
+    pthread_kill(usageThread, 9);
 
     return 0;
 }

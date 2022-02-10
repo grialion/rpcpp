@@ -1,51 +1,94 @@
 #include <iostream>
-#include <array>
-#include <cassert>
 #include <csignal>
-#include <cstdio>
-#include <cstdlib>
-#include <iostream>
 #include <thread>
-#include <vector>
-#include <stdio.h>
 #include <unistd.h>
-#include <string.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <string>
 #include <time.h>
 #include <regex>
 #include <fstream>
-#include <math.h>
+#include <filesystem>
+
+// Discord RPC
 #include "discord/discord.h"
+
+// X11 libs
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+
+
+// variables
+#define VERSION "2.0"
+
+namespace
+{
+    volatile bool interrupted{false};
+}
+namespace fs = std::filesystem;
+using namespace std;
+int startTime;
+Display *disp;
+float mem, cpu = 0;
+string distro;
+static int trapped_error_code = 0;
+string wm;
+
+vector<string> apps = {"blender", "chrome", "discord", "firefox", "gimp", "hoi4", "st", "surf", "vscode"};                                                                                                   // currently supported app icons on discord rpc (replace if you made your own discord application)
+map<string, string> aliases = {{"chromium", "chrome"}, {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"}}; // for apps with different names
+map<string, string> distros = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};
+string helpMsg = string(
+    "Usage:\n") + 
+    " rpcpp [options]\n\n" +
+    "Options:\n" +
+    " -f, --ignore-discord   don't check for discord on start\n" +
+    " --debug                print debug messages\n" +
+    " --usage-sleep=5000     sleep time in milliseconds between updating cpu and ram usages\n" +
+    " --update-sleep=100     sleep time in milliseconds between updating the rich presence and focused application\n\n" +
+    " -h, --help             display this help and exit\n" +
+    " -v, --version          output version number and exit";
 
 struct DiscordState
 {
     discord::User currentUser;
 
-    std::unique_ptr<discord::Core> core;
+    unique_ptr<discord::Core> core;
 };
 
-struct Dist
+struct DistroAsset
 {
-    std::string image;
-    std::string text;
+    string image;
+    string text;
 };
 
-struct Window
+struct WindowAsset
 {
-    std::string image;
-    std::string text;
+    string image;
+    string text;
 };
 
-std::string lower(std::string s)
+struct StartOptions
 {
-    std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c)
-                   { return std::tolower(c); });
+    bool ignoreDiscord = false;
+    bool debug = false;
+    int usageSleep = 5000;
+    int updateSleep = 100;
+    bool printHelp = false;
+    bool printVersion = false;
+};
+
+StartOptions options;
+
+// methods
+
+static int error_handler(Display *display, XErrorEvent *error)
+{
+    trapped_error_code = error->error_code;
+    return 0;
+}
+
+string lower(string s)
+{
+    transform(s.begin(), s.end(), s.begin(),
+              [](unsigned char c)
+              { return tolower(c); });
     return s;
 }
 
@@ -63,17 +106,42 @@ double ms_uptime(void)
     return retval;
 }
 
-namespace
+float getRAM()
 {
-    volatile bool interrupted{false};
+    ifstream meminfo;
+    meminfo.open("/proc/meminfo");
+
+    long total = 0;
+    long available = 0;
+
+    regex memavailr("MemAvailable: +(\\d+) kB");
+    regex memtotalr("MemTotal: +(\\d+) kB");
+    smatch matcher;
+
+    string line;
+
+    while (getline(meminfo, line))
+    {
+        if (regex_search(line, matcher, memavailr))
+        {
+            available = stoi(matcher[1]);
+        }
+        else if (regex_search(line, matcher, memtotalr))
+        {
+            total = stoi(matcher[1]);
+        }
+    }
+
+    if (total == 0)
+    {
+        return 0;
+    }
+    return (float)(total - available) / total * 100;
 }
-using namespace std;
-int startTime;
 
 void setActivity(DiscordState &state, string details, string sstate, string smallimage, string smallimagetext, string largeimage, string largeimagetext, long uptime, discord::ActivityType type)
 {
     time_t now = time(nullptr);
-    long ts = now - uptime;
     discord::Activity activity{};
     activity.SetDetails(details.c_str());
     activity.SetState(sstate.c_str());
@@ -81,18 +149,254 @@ void setActivity(DiscordState &state, string details, string sstate, string smal
     activity.GetAssets().SetSmallText(smallimagetext.c_str());
     activity.GetAssets().SetLargeImage(largeimage.c_str());
     activity.GetAssets().SetLargeText(largeimagetext.c_str());
-    activity.GetTimestamps().SetStart(ts);
+    activity.GetTimestamps().SetStart(uptime);
     activity.SetType(type);
+
     state.core->ActivityManager().UpdateActivity(activity, [](discord::Result result)
-                                                 { std::cout << ((result == discord::Result::Ok) ? "Succeeded" : "Failed")
-                                                             << " updating activity!\n"; });
+                                                 { if(options.debug) cout << ((result == discord::Result::Ok) ? "Succeeded" : "Failed")
+                                                        << " updating activity!\n"; });
 }
 
-bool in_array(const std::string &value, const std::vector<std::string> &array)
+string getActiveWindowName(Display *disp)
 {
-    return std::find(array.begin(), array.end(), value) != array.end();
+    Atom classreq = XInternAtom(disp, "WM_CLASS", False), type;
+    int form;
+    unsigned long remain, len;
+    unsigned char *list;
+
+    Atom request = XInternAtom(disp, "_NET_ACTIVE_WINDOW", False);
+    Window root = XDefaultRootWindow(disp);
+    Atom actualtype;
+    int actualformat;
+    unsigned long nitems;
+    unsigned long bytes_after; /* unused */
+    unsigned char *prop;
+    int status = XGetWindowProperty(disp, root, request, 0, (~0L), False, AnyPropertyType, &actualtype, &actualformat, &nitems, &bytes_after,
+                                    &prop);
+
+    if (nitems == 0)
+    {
+        return "no window";
+    }
+
+    if (XGetWindowProperty(disp, *((Window *)prop), classreq, 0, 1024, False, XA_STRING,
+                           &type, &form, &len, &remain, &list) != Success)
+    {
+        return "no window";
+    }
+
+    return (char *)list;
 }
 
-std::vector<std::string> apps = {"blender", "chrome", "discord", "firefox", "gimp", "hoi4", "st", "surf", "vscode"}; // currently supported app icons on discord rpc (replace if you made your own discord application)
-std::map<std::string, std::string> aliases = { {"chromium", "chrome"}, {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"} }; // for apps with different names
-std::map<std::string, std::string> distros = {{"Arch|Artix", "archlinux"}, {"Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};
+static unsigned long long lastTotalUser, lastTotalUserLow, lastTotalSys, lastTotalIdle;
+
+void getLast()
+{
+    FILE *file = fopen("/proc/stat", "r");
+    fscanf(file, "cpu %llu %llu %llu %llu", &lastTotalUser, &lastTotalUserLow,
+           &lastTotalSys, &lastTotalIdle);
+    fclose(file);
+}
+
+double getCPU()
+{
+    getLast();
+    sleep(1);
+    double percent;
+    FILE *file;
+    unsigned long long totalUser, totalUserLow, totalSys, totalIdle, total;
+
+    file = fopen("/proc/stat", "r");
+    fscanf(file, "cpu %llu %llu %llu %llu", &totalUser, &totalUserLow,
+           &totalSys, &totalIdle);
+    fclose(file);
+
+    if (totalUser < lastTotalUser || totalUserLow < lastTotalUserLow ||
+        totalSys < lastTotalSys || totalIdle < lastTotalIdle)
+    {
+        // Overflow detection. Just skip this value.
+        percent = -1.0;
+    }
+    else
+    {
+        total = (totalUser - lastTotalUser) + (totalUserLow - lastTotalUserLow) +
+                (totalSys - lastTotalSys);
+        percent = total;
+        total += (totalIdle - lastTotalIdle);
+        percent /= total;
+        percent *= 100;
+    }
+
+    lastTotalUser = totalUser;
+    lastTotalUserLow = totalUserLow;
+    lastTotalSys = totalSys;
+    lastTotalIdle = totalIdle;
+
+    return percent;
+}
+
+bool processRunning(string name, bool ignoreCase = true)
+{
+
+    string strReg = "\\/" + name + " ?";
+    regex nameRegex;
+    smatch progmatcher;
+
+    if (ignoreCase)
+        nameRegex = regex(strReg, regex::icase);
+
+    else
+        nameRegex = regex(strReg);
+
+    string procs;
+
+    regex processRegex("\\/proc\\/\\d+\\/cmdline");
+    smatch isProcessMatcher;
+
+    std::string path = "/proc";
+    for (const auto &entry : fs::directory_iterator(path))
+    {
+        if (fs::is_directory(entry.path()))
+        {
+            for (const auto &entry2 : fs::directory_iterator(entry.path()))
+            {
+                string path = entry2.path();
+                if (regex_search(path, isProcessMatcher, processRegex))
+                {
+                    ifstream s;
+                    s.open(entry2.path());
+                    string line;
+                    while (getline(s, line))
+                    {
+                        if (regex_search(line, progmatcher, nameRegex))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+void debug(string msg)
+{
+    if (options.debug)
+    {
+        time_t now;
+        time(&now);
+        char buf[sizeof "0000-00-00T00:00:00Z"];
+        // strftime(buf, sizeof buf, "%FT%FZ", gmtime(&now));
+        strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        cout << buf << " DEBUG: " << msg << endl;
+    }
+}
+
+bool in_array(const string &value, const vector<string> &array)
+{
+    return find(array.begin(), array.end(), value) != array.end();
+}
+
+void parseArgs(int argc, char **argv)
+{
+    smatch matcher;
+    regex usageRegex("--usage-sleep=(\\d+)");
+    regex updateRegex("--update-sleep=(\\d+)");
+
+    for (int i = 0; i < argc; i++)
+    {
+        string carg = string(argv[i]);
+        if(carg == "-h" || carg == "--help")
+        {
+            options.printHelp = true;
+        }
+        if(carg == "-v" || carg == "--version")
+        {
+            options.printVersion = true;
+        }
+        if (carg == "-f" || carg == "--ignore-discord")
+        {
+            options.ignoreDiscord = true;
+        }
+        if (carg == "--debug")
+        {
+            options.debug = true;
+        }
+        if (regex_search(carg, matcher, usageRegex))
+        {
+            options.usageSleep = stoi(matcher[1]);
+        }
+        if (regex_search(carg, matcher, updateRegex))
+        {
+            options.updateSleep = stoi(matcher[1]);
+        }
+    }
+}
+
+string getDistro()
+{
+    string distro;
+    string line;
+    ifstream lsbrelease;
+    regex distroreg("DISTRIB_ID=\"?([a-zA-Z0-9 ]+)\"?");
+    smatch distromatcher;
+    lsbrelease.open("/etc/lsb-release");
+    while (getline(lsbrelease, line))
+    {
+        if (regex_search(line, distromatcher, distroreg))
+        {
+            distro = distromatcher[1];
+        }
+    }
+    return distro;
+}
+
+WindowAsset getWindowAsset(string w)
+{
+    WindowAsset window{};
+    window.text = w;
+    window.image = "file";
+    w = lower(w);
+
+    if (in_array(w, apps))
+    {
+        window.image = w;
+    }
+    else
+    {
+        for (const auto &kv : aliases)
+        {
+            regex r = regex(kv.first);
+            smatch m;
+            if (regex_match(w, m, r))
+            {
+                window.image = kv.second;
+                break;
+            }
+        }
+    }
+
+    return window;
+}
+
+DistroAsset getDistroAsset(string d)
+{
+    DistroAsset dist{};
+    dist.text = d;
+    dist.image = "tux";
+
+    for (const auto &kv : distros)
+    {
+        regex r = regex(kv.first);
+        smatch m;
+        if (regex_match(d, m, r))
+        {
+            dist.image = kv.second;
+            break;
+        }
+    }
+
+    return dist;
+}

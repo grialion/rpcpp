@@ -6,7 +6,6 @@ then
     exit
 fi
 
-
 rm -rf tmp
 rm -rf lib
 rm -rf src/discord

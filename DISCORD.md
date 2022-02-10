@@ -7,7 +7,7 @@ Alternatively you can do it yourself if you don't want to use the script or it d
 ### Steps
 1. Download [Discord Game SDK](https://dl-game-sdk.discordapp.net/2.5.6/discord_game_sdk.zip)
 1. Extract the downloaded zip file
-1. Copy the files from the extracted `cpp` folder to the project's `discord` folder
+1. Copy the files from the extracted `cpp` folder to the project's `src/discord` folder
 2. Copy the files from the extracted `lib/x86_64` folder to the project's lib folder
 
 ---

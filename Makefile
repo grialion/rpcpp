@@ -1,29 +1,25 @@
 CC=/bin/g++
 
-CFILES=$(wildcard src/*.cpp)
+CPPFILES=$(wildcard src/*.cpp)
+HPPFILES=$(wildcard src/*.hpp)
 LIBFILES=$(wildcard src/discord/*.cpp)
-CFLAGS=-Llib/ -l:discord_game_sdk.so -lpthread
+CFLAGS=-Llib/ -l:discord_game_sdk.so -lpthread -lX11
 
-build/rpcpp: $(CFILES)
+build/rpcpp: $(CPPFILES) $(HPPFILES)
 	mkdir -p build
-	$(CC) $(CFILES) $(LIBFILES) $(CFLAGS) -o $@
-
-
-config:
-	if [[ -f "rpcpp" ]]; then rm rpcpp; fi
-	cp example rpcpp
-	sed s/PATH/$(shell pwd | sed 's/\//\\\\\//g')/g -i rpcpp
-	chmod +x start.sh rpcfetch.sh
+	$(CC) $(CPPFILES) $(LIBFILES) $(CFLAGS) -o $@
 
 clean:
-	rm -rf tmp build rpcpp
+	rm -rf tmp build
 
-install: config build/rpcpp
+install: build/rpcpp
 	mkdir -p ${DESTDIR}${PREFIX}/bin
-	cp -f rpcpp ${DESTDIR}${PREFIX}/bin
+	mkdir -p ${DESTDIR}${PREFIX}/lib
+	cp -f build/rpcpp ${DESTDIR}${PREFIX}/bin
+	cp -f lib/discord_game_sdk.so ${DESTDIR}${PREFIX}/lib
 	chmod 755 ${DESTDIR}${PREFIX}/bin/rpcpp
 
 uninstall:
 	rm -f ${DESTDIR}${PREFIX}/bin/rpcpp
 
-.PHONY: config clean install uninstall
+.PHONY: clean install uninstall
