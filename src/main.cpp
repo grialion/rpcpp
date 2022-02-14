@@ -17,11 +17,11 @@ void *updateRPC(void *ptr)
 
         try
         {
-            windowName = getActiveWindowName(disp);
+            windowName = getActiveWindowClassName(disp);
         }
         catch (exception ex)
         {
-            cout << "Error: " << ex.what() << endl;
+            debug(string("Error: ") + ex.what());
             continue;
         }
 
@@ -57,15 +57,15 @@ int main(int argc, char **argv)
 {
     parseArgs(argc, argv);
 
-    if(options.printHelp)
+    if (options.printHelp)
     {
         cout << helpMsg << endl;
         exit(0);
     }
-    if(options.printVersion)
+    if (options.printVersion)
     {
         cout << "RPC++ version " << VERSION << endl;
-        exit(0); 
+        exit(0);
     }
 
     int waitedTime = 0;

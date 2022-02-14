@@ -13,7 +13,7 @@
 // X11 libs
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
-
+#include <X11/Xutil.h>
 
 // variables
 #define VERSION "2.0"
@@ -35,15 +35,15 @@ vector<string> apps = {"blender", "chrome", "discord", "firefox", "gimp", "hoi4"
 map<string, string> aliases = {{"chromium", "chrome"}, {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"}}; // for apps with different names
 map<string, string> distros = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};
 string helpMsg = string(
-    "Usage:\n") + 
-    " rpcpp [options]\n\n" +
-    "Options:\n" +
-    " -f, --ignore-discord   don't check for discord on start\n" +
-    " --debug                print debug messages\n" +
-    " --usage-sleep=5000     sleep time in milliseconds between updating cpu and ram usages\n" +
-    " --update-sleep=100     sleep time in milliseconds between updating the rich presence and focused application\n\n" +
-    " -h, --help             display this help and exit\n" +
-    " -v, --version          output version number and exit";
+                     "Usage:\n") +
+                 " rpcpp [options]\n\n" +
+                 "Options:\n" +
+                 " -f, --ignore-discord   don't check for discord on start\n" +
+                 " --debug                print debug messages\n" +
+                 " --usage-sleep=5000     sleep time in milliseconds between updating cpu and ram usages\n" +
+                 " --update-sleep=100     sleep time in milliseconds between updating the rich presence and focused application\n\n" +
+                 " -h, --help             display this help and exit\n" +
+                 " -v, --version          output version number and exit";
 
 struct DiscordState
 {
@@ -69,7 +69,7 @@ struct StartOptions
     bool ignoreDiscord = false;
     bool debug = false;
     int usageSleep = 5000;
-    int updateSleep = 100;
+    int updateSleep = 300;
     bool printHelp = false;
     bool printVersion = false;
 };
@@ -157,7 +157,7 @@ void setActivity(DiscordState &state, string details, string sstate, string smal
                                                         << " updating activity!\n"; });
 }
 
-string getActiveWindowName(Display *disp)
+string getActiveWindowClassName(Display *disp)
 {
     Atom classreq = XInternAtom(disp, "WM_CLASS", False), type;
     int form;
@@ -179,13 +179,10 @@ string getActiveWindowName(Display *disp)
         return "no window";
     }
 
-    if (XGetWindowProperty(disp, *((Window *)prop), classreq, 0, 1024, False, XA_STRING,
-                           &type, &form, &len, &remain, &list) != Success)
-    {
-        return "no window";
-    }
-
-    return (char *)list;
+    XClassHint hint;
+    XGetClassHint(disp, *((Window *)prop), &hint);
+    XFree(hint.res_name);
+    return string(hint.res_class);
 }
 
 static unsigned long long lastTotalUser, lastTotalUserLow, lastTotalSys, lastTotalIdle;
@@ -308,11 +305,11 @@ void parseArgs(int argc, char **argv)
     for (int i = 0; i < argc; i++)
     {
         string carg = string(argv[i]);
-        if(carg == "-h" || carg == "--help")
+        if (carg == "-h" || carg == "--help")
         {
             options.printHelp = true;
         }
-        if(carg == "-v" || carg == "--version")
+        if (carg == "-v" || carg == "--version")
         {
             options.printVersion = true;
         }
