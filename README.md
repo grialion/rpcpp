@@ -4,33 +4,52 @@ RPC++ is a tool for Discord RPC (Rich Presence) to let your friends know about y
 
 ## Installing requirements
 ### Arch based systems
-```
+```sh
 pacman -S unzip
 ```
 ### Debian based systems
-```
+```sh
 apt install unzip -y
 ```
 
 ## Building
 **GNU Make**, and **Discord Game SDK** are **required**. To see more information about setting up Discord Game SDK, see [DISCORD.md](./DISCORD.md)
 
+If you have Arch Linux, please read the AUR section.
+
 To build RPC++, use the command: 
-```
+```sh
 make
 ```
 
 ## Installing & Running
 To install RPC++, run the this command:
-```
+```sh
 sudo make install
 ```
 You can run the app from any directory with
-```
+```sh
 rpcpp
 ```
 
 To run manually (without installing) you need to start `./build/rpcpp` with the variables `LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(pwd)/lib"`
+
+## AUR
+RPC++ is available in the Arch User Repository.
+
+To install, it run the commands:
+```sh
+pacman -S --needed base-devel
+pacman -S git
+git clone https://aur.archlinux.org/rpcpp-git.git
+cd rpcpp-git
+makepkg -si
+```
+
+You can use an AUR helper (for example yay):
+```sh
+yay -S rpcpp-git
+```
 
 ## Features
 - Displays your distro with an icon (supported: Arch, Gentoo, Mint, Ubuntu, Manjaro)
