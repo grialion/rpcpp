@@ -132,6 +132,8 @@ float getRAM()
         }
     }
 
+    meminfo.close();
+
     if (total == 0)
     {
         return 0;
@@ -176,13 +178,19 @@ string getActiveWindowClassName(Display *disp)
 
     if (nitems == 0)
     {
-        return "no window";
+        XFree(prop);
+
+        return "";
     }
 
     XClassHint hint;
     XGetClassHint(disp, *((Window *)prop), &hint);
     XFree(hint.res_name);
-    return string(hint.res_class);
+    XFree(prop);
+    string s(hint.res_class);
+    XFree(hint.res_class);
+
+    return s;
 }
 
 static unsigned long long lastTotalUser, lastTotalUserLow, lastTotalSys, lastTotalIdle;
@@ -354,6 +362,10 @@ WindowAsset getWindowAsset(string w)
 {
     WindowAsset window{};
     window.text = w;
+    if(w == "") {
+        window.image = "";
+        return window;
+    }
     window.image = "file";
     w = lower(w);
 

@@ -10,10 +10,11 @@ void *updateRPC(void *ptr)
     debug("Waiting for usages to load...");
     sleep(3); // wait for usages to load
     debug("Starting RPC loop.");
+    string windowName;
+
     while (true)
     {
-        sleep(options.updateSleep / 1000.0);
-        string windowName;
+        usleep(options.updateSleep * 1000);
 
         try
         {
