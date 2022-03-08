@@ -16,7 +16,7 @@
 #include <X11/Xutil.h>
 
 // variables
-#define VERSION "2.0"
+#define VERSION "2.1"
 
 namespace
 {
@@ -31,9 +31,11 @@ string distro;
 static int trapped_error_code = 0;
 string wm;
 
-vector<string> apps = {"blender", "chrome", "discord", "firefox", "gimp", "hoi4", "st", "surf", "vscode"};                                                                                                   // currently supported app icons on discord rpc (replace if you made your own discord application)
-map<string, string> aliases = {{"chromium", "chrome"}, {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"}}; // for apps with different names
-map<string, string> distros = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};
+vector<string> apps = {"blender", "chrome", "chromium", "discord", "dolphin", "firefox", "gimp", "hl2_linux", "hoi4", "konsole", "lutris", "st", "steam", "surf", "vscode", "worldbox", "xterm"}; // currently supported app icons on discord rpc (replace if you made your own discord application)
+map<string, string> aliases = {
+    {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"}, {"telegram(desktop)?", "telegram"}, {"terraria\\.bin\\.x86_64", "terraria"}, {"vivaldi(-stable)?", "vivaldi"}}; // for apps with different names
+map<string, string> distros_lsb = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};                                                                                                        // distro names in /etc/lsb_release
+map<string, string> distros_os = {{"Arch Linux", "archlinux"}, {"Linux Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"Manjaro Linux", "manjaro"}};                                                                                                       // same but in /etc/os-release (fallback)
 string helpMsg = string(
                      "Usage:\n") +
                  " rpcpp [options]\n\n" +
@@ -77,6 +79,8 @@ struct StartOptions
 StartOptions options;
 
 // methods
+
+void debug(string msg);
 
 static int error_handler(Display *display, XErrorEvent *error)
 {
@@ -155,8 +159,7 @@ void setActivity(DiscordState &state, string details, string sstate, string smal
     activity.SetType(type);
 
     state.core->ActivityManager().UpdateActivity(activity, [](discord::Result result)
-                                                 { if(options.debug) cout << ((result == discord::Result::Ok) ? "Succeeded" : "Failed")
-                                                        << " updating activity!\n"; });
+                                                 { if(options.debug) debug(string((result == discord::Result::Ok) ? "Succeeded" : "Failed")  + " updating activity!"); });
 }
 
 string getActiveWindowClassName(Display *disp)
@@ -293,7 +296,6 @@ void debug(string msg)
         time_t now;
         time(&now);
         char buf[sizeof "0000-00-00T00:00:00Z"];
-        // strftime(buf, sizeof buf, "%FT%FZ", gmtime(&now));
         strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
         cout << buf << " DEBUG: " << msg << endl;
     }
@@ -342,17 +344,32 @@ void parseArgs(int argc, char **argv)
 
 string getDistro()
 {
-    string distro;
+    string distro = "";
     string line;
-    ifstream lsbrelease;
-    regex distroreg("DISTRIB_ID=\"?([a-zA-Z0-9 ]+)\"?");
+    ifstream release;
+    regex distroreg;
     smatch distromatcher;
-    lsbrelease.open("/etc/lsb-release");
-    while (getline(lsbrelease, line))
+    if (fs::exists("/etc/lsb-release"))
+    {
+        distroreg = regex("DISTRIB_ID=\"?([a-zA-Z0-9 ]+)\"?");
+        release.open("/etc/lsb-release");
+    }
+    else if (fs::exists("/etc/os-release"))
+    {
+        distroreg = regex("NAME=\"?([a-zA-Z0-9 ]+)\"?");
+        release.open("/etc/os-release");
+    }
+    else
+    {
+        debug("Warning: Neither /etc/lsb-release nor /etc/os-release was found. Please install lsb_release or ask your distribution's developer to support os-release.");
+        return distro;
+    }
+    while (getline(release, line))
     {
         if (regex_search(line, distromatcher, distroreg))
         {
             distro = distromatcher[1];
+            break;
         }
     }
     return distro;
@@ -362,7 +379,8 @@ WindowAsset getWindowAsset(string w)
 {
     WindowAsset window{};
     window.text = w;
-    if(w == "") {
+    if (w == "")
+    {
         window.image = "";
         return window;
     }
@@ -393,17 +411,30 @@ WindowAsset getWindowAsset(string w)
 DistroAsset getDistroAsset(string d)
 {
     DistroAsset dist{};
-    dist.text = d;
+    dist.text = d + " / RPC++ " + VERSION;
     dist.image = "tux";
 
-    for (const auto &kv : distros)
+    for (const auto &kv : distros_lsb)
     {
-        regex r = regex(kv.first);
+        regex r = regex(kv.first, regex::icase);
         smatch m;
         if (regex_match(d, m, r))
         {
             dist.image = kv.second;
             break;
+        }
+    }
+    if (dist.image == "tux")
+    {
+        for (const auto &kv : distros_os)
+        {
+            regex r = regex(kv.first, regex::icase);
+            smatch m;
+            if (regex_match(d, m, r))
+            {
+                dist.image = kv.second;
+                break;
+            }
         }
     }
 

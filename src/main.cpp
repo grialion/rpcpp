@@ -43,6 +43,7 @@ void *updateRPC(void *ptr)
 void *updateUsage(void *ptr)
 {
     distro = getDistro();
+    debug("Distro: " + distro);
 
     startTime = time(0) - ms_uptime();
     wm = string(wm_info(disp));
@@ -74,7 +75,7 @@ int main(int argc, char **argv)
     {
         if (waitedTime > 60)
         {
-            cout << "Discord is not running for " << waitedTime << " seconds. Maybe ignore Discord check with --ignore-discord or -f? ";
+            cout << "Discord is not running for " << waitedTime << " seconds. Maybe ignore Discord check with --ignore-discord or -f?";
         }
         cout << "Waiting for Discord..." << endl;
         waitedTime += 5;
@@ -101,7 +102,7 @@ int main(int argc, char **argv)
     DiscordState state{};
 
     discord::Core *core{};
-    auto result = discord::Core::Create(934099338374824007, DiscordCreateFlags_Default, &core);
+    auto result = discord::Core::Create(934099338374824007, DiscordCreateFlags_Default, &core); // change with your own app's id if you made one
     state.core.reset(core);
     if (!state.core)
     {
@@ -119,6 +120,7 @@ int main(int argc, char **argv)
 
     pthread_create(&updateThread, 0, updateRPC, ((void *)&state));
     debug("Threads started.");
+    debug("Xorg version " + to_string(XProtocolVersion(disp))); // this is kinda dumb to do since it shouldn't be anything else other than 11, but whatever
     cout << "Connected to Discord." << endl;
 
     signal(SIGINT, [](int)
