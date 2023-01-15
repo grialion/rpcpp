@@ -24,18 +24,21 @@ namespace
 }
 namespace fs = std::filesystem;
 using namespace std;
+
 int startTime;
 Display *disp;
-float mem, cpu = 0;
+float mem = -1, cpu = -1;
 string distro;
 static int trapped_error_code = 0;
 string wm;
+regex memavailr("MemAvailable: +(\\d+) kB");
+regex memtotalr("MemTotal: +(\\d+) kB");
 
 vector<string> apps = {"blender", "chrome", "chromium", "discord", "dolphin", "firefox", "gimp", "hl2_linux", "hoi4", "konsole", "lutris", "st", "steam", "surf", "vscode", "worldbox", "xterm"}; // currently supported app icons on discord rpc (replace if you made your own discord application)
 map<string, string> aliases = {
-    {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"}, {"telegram(desktop)?", "telegram"}, {"terraria\\.bin\\.x86_64", "terraria"}, {"vivaldi(-stable)?", "vivaldi"}}; // for apps with different names
-map<string, string> distros_lsb = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};                                                                                                        // distro names in /etc/lsb_release
-map<string, string> distros_os = {{"Arch Linux", "archlinux"}, {"Linux Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"Manjaro Linux", "manjaro"}};                                                                                                       // same but in /etc/os-release (fallback)
+    {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"}, {"lunar client [a-z0-9\\(\\)\\.\\-\\/]+", "minecraft"}, {"telegram(desktop)?", "telegram"}, {"terraria\\.bin\\.x86_64", "terraria"}, {"vivaldi(-stable)?", "vivaldi"}}; // for apps with different names
+map<string, string> distros_lsb = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};                                                                                                                                                                // distro names in /etc/lsb_release
+map<string, string> distros_os = {{"Arch Linux", "archlinux"}, {"Linux Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"Manjaro Linux", "manjaro"}};                                                                                                                                                               // same but in /etc/os-release (fallback)
 string helpMsg = string(
                      "Usage:\n") +
                  " rpcpp [options]\n\n" +
@@ -78,9 +81,12 @@ struct StartOptions
 
 StartOptions options;
 
-// methods
+// local imports
 
-void debug(string msg);
+#include "logging.hpp"
+#include "wm.hpp"
+
+// methods
 
 static int error_handler(Display *display, XErrorEvent *error)
 {
@@ -118,8 +124,6 @@ float getRAM()
     long total = 0;
     long available = 0;
 
-    regex memavailr("MemAvailable: +(\\d+) kB");
-    regex memtotalr("MemTotal: +(\\d+) kB");
     smatch matcher;
 
     string line;
@@ -159,37 +163,29 @@ void setActivity(DiscordState &state, string details, string sstate, string smal
     activity.SetType(type);
 
     state.core->ActivityManager().UpdateActivity(activity, [](discord::Result result)
-                                                 { if(options.debug) debug(string((result == discord::Result::Ok) ? "Succeeded" : "Failed")  + " updating activity!"); });
+                                                 { if(options.debug) log(string((result == discord::Result::Ok) ? "Succeeded" : "Failed")  + " updating activity!", LogType::DEBUG); });
 }
 
 string getActiveWindowClassName(Display *disp)
 {
-    Atom classreq = XInternAtom(disp, "WM_CLASS", False), type;
-    int form;
-    unsigned long remain, len;
-    unsigned char *list;
-
-    Atom request = XInternAtom(disp, "_NET_ACTIVE_WINDOW", False);
     Window root = XDefaultRootWindow(disp);
-    Atom actualtype;
-    int actualformat;
-    unsigned long nitems;
-    unsigned long bytes_after; /* unused */
-    unsigned char *prop;
-    int status = XGetWindowProperty(disp, root, request, 0, (~0L), False, AnyPropertyType, &actualtype, &actualformat, &nitems, &bytes_after,
-                                    &prop);
 
-    if (nitems == 0)
+    char *prop = get_property(disp, root, XA_WINDOW, "_NET_ACTIVE_WINDOW");
+
+    if (prop == NULL)
     {
-        XFree(prop);
-
         return "";
     }
 
     XClassHint hint;
-    XGetClassHint(disp, *((Window *)prop), &hint);
+    int hintStatus = XGetClassHint(disp, *((Window *)prop), &hint);
+
+    if (hintStatus == 0)
+    {
+        return "";
+    }
+
     XFree(hint.res_name);
-    XFree(prop);
     string s(hint.res_class);
     XFree(hint.res_class);
 
@@ -289,18 +285,6 @@ bool processRunning(string name, bool ignoreCase = true)
     return false;
 }
 
-void debug(string msg)
-{
-    if (options.debug)
-    {
-        time_t now;
-        time(&now);
-        char buf[sizeof "0000-00-00T00:00:00Z"];
-        strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-        cout << buf << " DEBUG: " << msg << endl;
-    }
-}
-
 bool in_array(const string &value, const vector<string> &array)
 {
     return find(array.begin(), array.end(), value) != array.end();
@@ -361,7 +345,7 @@ string getDistro()
     }
     else
     {
-        debug("Warning: Neither /etc/lsb-release nor /etc/os-release was found. Please install lsb_release or ask your distribution's developer to support os-release.");
+        log("Warning: Neither /etc/lsb-release nor /etc/os-release was found. Please install lsb_release or ask your distribution's developer to support os-release.", LogType::DEBUG);
         return distro;
     }
     while (getline(release, line))

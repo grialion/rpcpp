@@ -1,19 +1,28 @@
 #include "rpcpp.hpp"
-#include "wm.hpp"
 
 void *updateRPC(void *ptr)
 {
+    string windowName, lastWindow;
+    WindowAsset windowAsset;
+    DistroAsset distroAsset;
     DiscordState *state = (struct DiscordState *)ptr;
 
-    string lastWindow;
+    log("Waiting for usages to load...", LogType::DEBUG);
 
-    debug("Waiting for usages to load...");
-    sleep(3); // wait for usages to load
-    debug("Starting RPC loop.");
-    string windowName;
+    // wait for usages to load
+    while (cpu == -1 || mem == -1)
+    {
+        usleep(1000);
+    }
+
+    log("Starting RPC loop.", LogType::DEBUG);
+    distroAsset = getDistroAsset(distro);
 
     while (true)
-    {
+    {        
+        string cpupercent = to_string((long)cpu);
+        string rampercent = to_string((long)mem);
+
         usleep(options.updateSleep * 1000);
 
         try
@@ -22,31 +31,29 @@ void *updateRPC(void *ptr)
         }
         catch (exception ex)
         {
-            debug(string("Error: ") + ex.what());
+            log(ex.what(), LogType::ERROR);
             continue;
         }
 
         if (windowName != lastWindow)
         {
+            windowAsset = getWindowAsset(windowName);
             lastWindow = windowName;
-
-            DistroAsset distroAsset = getDistroAsset(distro);
-            WindowAsset windowAsset = getWindowAsset(windowName);
-            string cpupercent = to_string((long)cpu);
-            string rampercent = to_string((long)mem);
-
-            setActivity(*state, string("CPU: " + cpupercent + "% | RAM: " + rampercent + "%"), "WM: " + wm, windowAsset.image, windowAsset.text, distroAsset.image, distroAsset.text, startTime, discord::ActivityType::Playing);
         }
+
+        setActivity(*state, string("CPU: " + cpupercent + "% | RAM: " + rampercent + "%"), "WM: " + wm, windowAsset.image, windowAsset.text, distroAsset.image, distroAsset.text, startTime, discord::ActivityType::Playing);
     }
 }
 
 void *updateUsage(void *ptr)
 {
     distro = getDistro();
-    debug("Distro: " + distro);
+    log("Distro: " + distro, LogType::DEBUG);
 
     startTime = time(0) - ms_uptime();
     wm = string(wm_info(disp));
+    log("WM: " + wm, LogType::DEBUG);
+
     while (true)
     {
         mem = getRAM();
@@ -75,9 +82,9 @@ int main(int argc, char **argv)
     {
         if (waitedTime > 60)
         {
-            cout << "Discord is not running for " << waitedTime << " seconds. Maybe ignore Discord check with --ignore-discord or -f?";
+            log(string("Discord is not running for ") + to_string(waitedTime) + " seconds. Maybe ignore Discord check with --ignore-discord or -f?", LogType::INFO);
         }
-        cout << "Waiting for Discord..." << endl;
+        log("Waiting for Discord...", LogType::INFO);
         waitedTime += 5;
         sleep(5);
     }
@@ -97,7 +104,7 @@ int main(int argc, char **argv)
     pthread_t updateThread;
     pthread_t usageThread;
     pthread_create(&usageThread, 0, updateUsage, 0);
-    debug("Created usage thread");
+    log("Created usage thread", LogType::DEBUG);
 
     DiscordState state{};
 
@@ -119,9 +126,9 @@ int main(int argc, char **argv)
     }
 
     pthread_create(&updateThread, 0, updateRPC, ((void *)&state));
-    debug("Threads started.");
-    debug("Xorg version " + to_string(XProtocolVersion(disp))); // this is kinda dumb to do since it shouldn't be anything else other than 11, but whatever
-    cout << "Connected to Discord." << endl;
+    log("Threads started.", LogType::DEBUG);
+    log("Xorg version " + to_string(XProtocolVersion(disp)), LogType::DEBUG); // this is kinda dumb to do since it shouldn't be anything else other than 11, but whatever
+    log("Connected to Discord.", LogType::INFO);
 
     signal(SIGINT, [](int)
            { interrupted = true; });
@@ -134,6 +141,8 @@ int main(int argc, char **argv)
     } while (!interrupted);
 
     cout << "Exiting..." << endl;
+
+    XCloseDisplay(disp);
 
     pthread_kill(updateThread, 9);
     pthread_kill(usageThread, 9);
