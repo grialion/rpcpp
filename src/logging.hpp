@@ -31,6 +31,8 @@ void log(string msg, LogType type)
         time(&now);
         char buf[sizeof "0000-00-00T00:00:00Z"];
         strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-        cout << buf << " " << convertLogType(type) << ": " << msg << endl;
+        // build a string to avoid multi threaded mess
+        string out = string(buf) + " " + convertLogType(type) + ": " + msg + "\n";
+        cout << out;
     }
 }
