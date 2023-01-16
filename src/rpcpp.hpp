@@ -187,6 +187,8 @@ string getActiveWindowClassName(Display *disp)
     XClassHint hint;
     int hintStatus = XGetClassHint(disp, *((Window *)prop), &hint);
 
+    free(prop);
+
     if (hintStatus == 0)
     {
         return "";

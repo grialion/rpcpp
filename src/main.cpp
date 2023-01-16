@@ -19,7 +19,7 @@ void *updateRPC(void *ptr)
     distroAsset = getDistroAsset(distro);
 
     while (true)
-    {        
+    {
         string cpupercent = to_string((long)cpu);
         string rampercent = to_string((long)mem);
 

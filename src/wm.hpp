@@ -1,5 +1,15 @@
 #pragma once
 
+/**
+ * @brief Get X window property simplified.
+ * Should be freed after usage.
+ * 
+ * @param disp Current display
+ * @param win Current window
+ * @param xa_prop_type Prop type, equal to the return prop type Atom, otherwise NULL will be returned
+ * @param prop_name Name of the property that should be queried. Will be converted to a new Atom
+ * @return char* 
+ */
 static char *get_property(Display *disp, Window win,
                           Atom xa_prop_type, string prop_name)
 {
