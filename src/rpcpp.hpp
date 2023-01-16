@@ -35,8 +35,8 @@ string wm;
 vector<string> apps = {"blender", "chrome", "chromium", "discord", "dolphin", "firefox", "gimp", "hl2_linux", "hoi4", "konsole", "lutris", "st", "steam", "surf", "vscode", "worldbox", "xterm"}; // currently supported app icons on discord rpc (replace if you made your own discord application)
 map<string, string> aliases = {
     {"vscodium", "vscode"}, {"code", "vscode"}, {"code - [a-z]+", "vscode"}, {"stardew valley", "stardewvalley"}, {"minecraft [a-z0-9.]+", "minecraft"}, {"lunar client [a-z0-9\\(\\)\\.\\-\\/]+", "minecraft"}, {"telegram(desktop)?", "telegram"}, {"terraria\\.bin\\.x86_64", "terraria"}, {"u?xterm", "xterm"}, {"vivaldi(-stable)?", "vivaldi"}}; // for apps with different names
-map<string, string> distros_lsb = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};                                                                                                                                                                // distro names in /etc/lsb_release
-map<string, string> distros_os = {{"Arch Linux", "archlinux"}, {"Linux Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"Manjaro Linux", "manjaro"}};                                                                                                                                                               // same but in /etc/os-release (fallback)
+map<string, string> distros_lsb = {{"Arch|Artix", "archlinux"}, {"LinuxMint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"ManjaroLinux", "manjaro"}};                                                                                                                                                                                      // distro names in /etc/lsb_release
+map<string, string> distros_os = {{"Arch Linux", "archlinux"}, {"Linux Mint", "lmint"}, {"Gentoo", "gentoo"}, {"Ubuntu", "ubuntu"}, {"Manjaro Linux", "manjaro"}};                                                                                                                                                                                     // same but in /etc/os-release (fallback)
 string helpMsg = string(
                      "Usage:\n") +
                  " rpcpp [options]\n\n" +
@@ -54,6 +54,8 @@ string helpMsg = string(
 regex memavailr("MemAvailable: +(\\d+) kB");
 regex memtotalr("MemTotal: +(\\d+) kB");
 regex processRegex("\\/proc\\/\\d+\\/cmdline");
+regex usageRegex("^usage-sleep=(\\d+)$");
+regex updateRegex("^update-sleep=(\\d+)$");
 
 vector<pair<regex, string>> aliases_regex = {};
 vector<pair<regex, string>> distros_lsb_regex = {};
@@ -78,7 +80,7 @@ struct WindowAsset
     string text;
 };
 
-struct StartOptions
+struct Config
 {
     bool ignoreDiscord = false;
     bool debug = false;
@@ -89,7 +91,7 @@ struct StartOptions
     bool printVersion = false;
 };
 
-StartOptions options;
+Config config;
 
 // local imports
 
@@ -172,7 +174,7 @@ void setActivity(DiscordState &state, string details, string sstate, string smal
     activity.SetType(type);
 
     state.core->ActivityManager().UpdateActivity(activity, [](discord::Result result)
-                                                 { if(options.debug) log(string((result == discord::Result::Ok) ? "Succeeded" : "Failed")  + " updating activity!", LogType::DEBUG); });
+                                                 { if(config.debug) log(string((result == discord::Result::Ok) ? "Succeeded" : "Failed")  + " updating activity!", LogType::DEBUG); });
 }
 
 string getActiveWindowClassName(Display *disp)
@@ -299,43 +301,102 @@ bool in_array(const string &value, const vector<string> &array)
     return find(array.begin(), array.end(), value) != array.end();
 }
 
-void parseArgs(int argc, char **argv)
+void parseConfigOption(Config *config, char *option, bool arg)
 {
     smatch matcher;
-    regex usageRegex("--usage-sleep=(\\d+)");
-    regex updateRegex("--update-sleep=(\\d+)");
+    string s = option;
 
-    for (int i = 0; i < argc; i++)
+    if (arg)
     {
-        string carg = string(argv[i]);
-        if (carg == "-h" || carg == "--help")
+        if (s == "-h" || s == "--help")
         {
-            options.printHelp = true;
+            config->printHelp = true;
+            return;
         }
-        if (carg == "-v" || carg == "--version")
+
+        if (s == "-v" || s == "--version")
         {
-            options.printVersion = true;
+            config->printVersion = true;
+            return;
         }
-        if (carg == "-f" || carg == "--ignore-discord")
+
+        if (s == "--debug")
         {
-            options.ignoreDiscord = true;
+            config->debug = true;
+            return;
         }
-        if (carg == "--debug")
+
+        if (!strncmp(option, "--", 2))
         {
-            options.debug = true;
+            s = s.substr(2, s.size() - 2);
         }
-        if (carg == "--no-small-image")
+    }
+
+    if (s == "ignore-discord")
+    {
+        config->ignoreDiscord = true;
+        return;
+    }
+
+    if (s == "no-small-image")
+    {
+        config->noSmallImage = true;
+        return;
+    }
+
+    if (regex_search(s, matcher, usageRegex))
+    {
+        config->usageSleep = stoi(matcher[1]);
+        return;
+    }
+
+    if (regex_search(s, matcher, updateRegex))
+    {
+        config->updateSleep = stoi(matcher[1]);
+        return;
+    }
+}
+
+void parseConfig(string configFile, Config *config)
+{
+    ifstream file(configFile);
+    if (file.is_open())
+    {
+        string line;
+        while (getline(file, line))
         {
-            options.noSmallImage = true;
+            parseConfigOption(config, (char *)line.c_str(), false);
         }
-        if (regex_search(carg, matcher, usageRegex))
-        {
-            options.usageSleep = stoi(matcher[1]);
-        }
-        if (regex_search(carg, matcher, updateRegex))
-        {
-            options.updateSleep = stoi(matcher[1]);
-        }
+        file.close();
+    }
+}
+
+/**
+ * @brief Parse default configs
+ * /etc/rpcpp/config < ~/.config/rpcpp/config
+ */
+void parseConfigs()
+{
+    char *home = getenv("HOME");
+    if (!home)
+    {
+        parseConfig("/etc/rpcpp/config", &config);
+        return;
+    }
+
+    string configFile = string(home) + "/.config/rpcpp/config";
+    parseConfig(configFile, &config);
+    if (ifstream(configFile).fail())
+    {
+        parseConfig("/etc/rpcpp/config", &config);
+    }
+}
+
+void parseArgs(int argc, char **argv)
+{
+    for (int i = 1; i < argc; i++)
+    {
+        parseConfigOption(&config, argv[i], true);
     }
 }
 

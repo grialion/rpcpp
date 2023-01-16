@@ -23,9 +23,9 @@ void *updateRPC(void *ptr)
         string cpupercent = to_string((long)cpu);
         string rampercent = to_string((long)mem);
 
-        usleep(options.updateSleep * 1000);
+        usleep(config.updateSleep * 1000);
 
-        if (!options.noSmallImage)
+        if (!config.noSmallImage)
         {
             try
             {
@@ -61,27 +61,28 @@ void *updateUsage(void *ptr)
     {
         mem = getRAM();
         cpu = getCPU();
-        sleep(options.usageSleep / 1000.0);
+        sleep(config.usageSleep / 1000.0);
     }
 }
 
 int main(int argc, char **argv)
 {
+    parseConfigs();
     parseArgs(argc, argv);
 
-    if (options.printHelp)
+    if (config.printHelp)
     {
         cout << helpMsg << endl;
         exit(0);
     }
-    if (options.printVersion)
+    if (config.printVersion)
     {
         cout << "RPC++ version " << VERSION << endl;
         exit(0);
     }
 
     int waitedTime = 0;
-    while (!processRunning("discord") && !options.ignoreDiscord)
+    while (!processRunning("discord") && !config.ignoreDiscord)
     {
         if (waitedTime > 60)
         {
@@ -124,7 +125,7 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
-    if (options.debug)
+    if (config.debug)
     {
         state.core->SetLogHook(
             discord::LogLevel::Debug, [](discord::LogLevel level, const char *message)

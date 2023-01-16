@@ -25,7 +25,7 @@ inline const char *convertLogType(LogType type)
 
 void log(string msg, LogType type)
 {
-    if (options.debug)
+    if (config.debug)
     {
         time_t now;
         time(&now);
