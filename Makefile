@@ -1,4 +1,4 @@
-CC=/bin/g++
+CC=/usr/bin/g++
 
 CPPFILES=$(wildcard src/*.cpp)
 HPPFILES=$(wildcard src/*.hpp)
