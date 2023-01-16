@@ -44,7 +44,8 @@ string helpMsg = string(
                  " -f, --ignore-discord   don't check for discord on start\n" +
                  " --debug                print debug messages\n" +
                  " --usage-sleep=5000     sleep time in milliseconds between updating cpu and ram usages\n" +
-                 " --update-sleep=100     sleep time in milliseconds between updating the rich presence and focused application\n\n" +
+                 " --update-sleep=100     sleep time in milliseconds between updating the rich presence and focused application\n" +
+                 " --no-small-image       disable small image in the rich presence (focused application)\n\n" +
                  " -h, --help             display this help and exit\n" +
                  " -v, --version          output version number and exit";
 
@@ -83,6 +84,7 @@ struct StartOptions
     bool debug = false;
     int usageSleep = 5000;
     int updateSleep = 300;
+    bool noSmallImage = false;
     bool printHelp = false;
     bool printVersion = false;
 };
@@ -321,6 +323,10 @@ void parseArgs(int argc, char **argv)
         if (carg == "--debug")
         {
             options.debug = true;
+        }
+        if (carg == "--no-small-image")
+        {
+            options.noSmallImage = true;
         }
         if (regex_search(carg, matcher, usageRegex))
         {

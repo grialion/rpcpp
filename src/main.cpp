@@ -25,20 +25,23 @@ void *updateRPC(void *ptr)
 
         usleep(options.updateSleep * 1000);
 
-        try
+        if (!options.noSmallImage)
         {
-            windowName = getActiveWindowClassName(disp);
-        }
-        catch (exception ex)
-        {
-            log(ex.what(), LogType::ERROR);
-            continue;
-        }
+            try
+            {
+                windowName = getActiveWindowClassName(disp);
+            }
+            catch (exception ex)
+            {
+                log(ex.what(), LogType::ERROR);
+                continue;
+            }
 
-        if (windowName != lastWindow)
-        {
-            windowAsset = getWindowAsset(windowName);
-            lastWindow = windowName;
+            if (windowName != lastWindow)
+            {
+                windowAsset = getWindowAsset(windowName);
+                lastWindow = windowName;
+            }
         }
 
         setActivity(*state, string("CPU: " + cpupercent + "% | RAM: " + rampercent + "%"), "WM: " + wm, windowAsset.image, windowAsset.text, distroAsset.image, distroAsset.text, startTime, discord::ActivityType::Playing);
