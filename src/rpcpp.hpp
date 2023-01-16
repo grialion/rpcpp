@@ -31,8 +31,6 @@ float mem = -1, cpu = -1;
 string distro;
 static int trapped_error_code = 0;
 string wm;
-regex memavailr("MemAvailable: +(\\d+) kB");
-regex memtotalr("MemTotal: +(\\d+) kB");
 
 vector<string> apps = {"blender", "chrome", "chromium", "discord", "dolphin", "firefox", "gimp", "hl2_linux", "hoi4", "konsole", "lutris", "st", "steam", "surf", "vscode", "worldbox", "xterm"}; // currently supported app icons on discord rpc (replace if you made your own discord application)
 map<string, string> aliases = {
@@ -49,6 +47,16 @@ string helpMsg = string(
                  " --update-sleep=100     sleep time in milliseconds between updating the rich presence and focused application\n\n" +
                  " -h, --help             display this help and exit\n" +
                  " -v, --version          output version number and exit";
+
+// regular expressions
+
+regex memavailr("MemAvailable: +(\\d+) kB");
+regex memtotalr("MemTotal: +(\\d+) kB");
+regex processRegex("\\/proc\\/\\d+\\/cmdline");
+
+vector<pair<regex, string>> aliases_regex = {};
+vector<pair<regex, string>> distros_lsb_regex = {};
+vector<pair<regex, string>> distros_os_regex = {};
 
 struct DiscordState
 {
@@ -125,7 +133,6 @@ float getRAM()
     long available = 0;
 
     smatch matcher;
-
     string line;
 
     while (getline(meminfo, line))
@@ -253,8 +260,6 @@ bool processRunning(string name, bool ignoreCase = true)
         nameRegex = regex(strReg);
 
     string procs;
-
-    regex processRegex("\\/proc\\/\\d+\\/cmdline");
     smatch isProcessMatcher;
 
     std::string path = "/proc";
@@ -377,9 +382,9 @@ WindowAsset getWindowAsset(string w)
     }
     else
     {
-        for (const auto &kv : aliases)
+        for (const auto &kv : aliases_regex)
         {
-            regex r = regex(kv.first);
+            regex r = kv.first;
             smatch m;
             if (regex_match(w, m, r))
             {
@@ -398,9 +403,9 @@ DistroAsset getDistroAsset(string d)
     dist.text = d + " / RPC++ " + VERSION;
     dist.image = "tux";
 
-    for (const auto &kv : distros_lsb)
+    for (const auto &kv : distros_lsb_regex)
     {
-        regex r = regex(kv.first, regex::icase);
+        regex r = kv.first;
         smatch m;
         if (regex_match(d, m, r))
         {
@@ -410,9 +415,9 @@ DistroAsset getDistroAsset(string d)
     }
     if (dist.image == "tux")
     {
-        for (const auto &kv : distros_os)
+        for (const auto &kv : distros_os_regex)
         {
-            regex r = regex(kv.first, regex::icase);
+            regex r = kv.first;
             smatch m;
             if (regex_match(d, m, r))
             {
@@ -423,4 +428,27 @@ DistroAsset getDistroAsset(string d)
     }
 
     return dist;
+}
+
+/**
+ * @brief Compile strings to regular expressions
+ */
+void compileRegexes(map<string, string> *from, vector<pair<regex, string>> *to, bool ignoreCase)
+{
+
+    for (const auto &kv : *from)
+    {
+        const regex r = regex(kv.first);
+        to->push_back({r, kv.second});
+    }
+}
+
+/**
+ * @brief Compile all strings to regular expressions
+ */
+void compileAllRegexes()
+{
+    compileRegexes(&aliases, &aliases_regex, false);
+    compileRegexes(&distros_lsb, &distros_lsb_regex, true);
+    compileRegexes(&distros_os, &distros_os_regex, true);
 }

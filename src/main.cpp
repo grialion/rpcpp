@@ -101,6 +101,9 @@ int main(int argc, char **argv)
     trapped_error_code = 0;
     old_error_handler = XSetErrorHandler(error_handler);
 
+    // Compile all regexes
+    compileAllRegexes();
+
     pthread_t updateThread;
     pthread_t usageThread;
     pthread_create(&usageThread, 0, updateUsage, 0);
