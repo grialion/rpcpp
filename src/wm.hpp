@@ -8,10 +8,10 @@
  * @param win Current window
  * @param xa_prop_type Prop type, equal to the return prop type Atom, otherwise NULL will be returned
  * @param prop_name Name of the property that should be queried. Will be converted to a new Atom
- * @return char* 
+ * @return 1 on success, 0 on error
  */
-static char *get_property(Display *disp, Window win,
-                          Atom xa_prop_type, string prop_name)
+static int get_property(Display *disp, Window win,
+                          Atom xa_prop_type, string prop_name, char *ret, size_t ret_length)
 {
     Atom xa_prop_name;
     Atom xa_ret_type;
@@ -20,7 +20,6 @@ static char *get_property(Display *disp, Window win,
     unsigned long ret_bytes_after;
     unsigned long tmp_size;
     unsigned char *ret_prop;
-    char *ret;
 
     xa_prop_name = XInternAtom(disp, prop_name.c_str(), False);
 
@@ -28,54 +27,52 @@ static char *get_property(Display *disp, Window win,
                            xa_prop_type, &xa_ret_type, &ret_format,
                            &ret_nitems, &ret_bytes_after, &ret_prop) != Success)
     {
-        return NULL;
+        return 0;
     }
 
-    if (xa_ret_type != xa_prop_type || ret_prop == nullptr)
+    if (xa_ret_type != xa_prop_type)
     {
-        if (xa_ret_type != xa_prop_type)
-        {
-            log("Invalid return type received: " + to_string(xa_ret_type), LogType::WARN);
-        }
-        
-        if (ret_prop != nullptr)
-        {
-            XFree(ret_prop);
-        }
-        return NULL;
+        log("Invalid return type received: " + to_string(xa_ret_type), LogType::WARN);
+        XFree(ret_prop);
+
+        return 0;
     }
 
     tmp_size = (ret_format / (16 / sizeof(long))) * ret_nitems;
-    ret = (char *)malloc(tmp_size + 1);
-    memcpy(ret, ret_prop, tmp_size);
-    ret[tmp_size] = '\0';
+    tmp_size = ret_length < tmp_size ? ret_length : tmp_size;
+
+    memcpy(ret, ret_prop, tmp_size - 1);
+    ret[tmp_size - 1] = '\0';
 
     XFree(ret_prop);
-    return ret;
+    return 1;
 }
 
 string wm_info(Display *disp)
 {
-    Window *sup_window = NULL;
-    char *wm_name = NULL;
-    char *name_out;
+    Window sup_window[256];
+    char wm_name[256];
 
-    if (!(sup_window = (Window *)get_property(disp, DefaultRootWindow(disp),
-                                              XA_WINDOW, "_NET_SUPPORTING_WM_CHECK")))
+    if (!get_property(disp, DefaultRootWindow(disp),
+                                              XA_WINDOW, "_NET_SUPPORTING_WM_CHECK",
+                                              (char *)sup_window, sizeof(sup_window)))
     {
-        if (!(sup_window = (Window *)get_property(disp, DefaultRootWindow(disp),
-                                                  XA_CARDINAL, "_WIN_SUPPORTING_WM_CHECK")))
+        if (!get_property(disp, DefaultRootWindow(disp),
+                                                  XA_CARDINAL, "_WIN_SUPPORTING_WM_CHECK",
+                                              (char *)sup_window, sizeof(sup_window)))
         {
             cout << "could not get window manager\n";
         }
     }
 
     /* WM_NAME */
-    if (!(wm_name = get_property(disp, *sup_window,
-                                 XInternAtom(disp, "UTF8_STRING", False), "_NET_WM_NAME")))
+    if (!get_property(disp, *sup_window,
+                                 XInternAtom(disp, "UTF8_STRING", False), "_NET_WM_NAME",
+                                 wm_name, sizeof(wm_name)))
     {
-        if (!(wm_name = get_property(disp, *sup_window,
-                                     XA_STRING, "_NET_WM_NAME")))
+        if (!get_property(disp, *sup_window,
+                                     XA_STRING, "_NET_WM_NAME",
+                                 wm_name, sizeof(wm_name)))
         {
             cout << "could not get window manager name\n";
         }
