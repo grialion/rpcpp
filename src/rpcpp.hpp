@@ -16,7 +16,7 @@
 #include <X11/Xutil.h>
 
 // variables
-#define VERSION "2.1.1"
+#define VERSION "2.2.0"
 
 namespace
 {
