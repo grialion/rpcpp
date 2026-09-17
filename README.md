@@ -37,7 +37,7 @@ To run manually (without installing) you need to start `./build/rpcpp` with the 
 ## AUR
 RPC++ is available in the Arch User Repository.
 
-To install, it run the commands:
+To install, run the commands:
 ```sh
 pacman -S --needed base-devel
 pacman -S git
@@ -59,6 +59,7 @@ yay -S rpcpp-git
 - Displays your uptime
 - Refreshes every second
   
+
 ![Preview of the rich presence](./screenshot.png)
 
 ## Will you add more application/distro support?
