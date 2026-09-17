@@ -1,6 +1,8 @@
 # RPC++
 RPC++ is a tool for Discord RPC (Rich Presence) to let your friends know about your Linux system
 
+> [!IMPORTANT]
+> This project has been archived. Check out https://github.com/rpcfetch/rpcfetch for the continuation.
 
 ## Installing requirements
 ### Arch based systems
